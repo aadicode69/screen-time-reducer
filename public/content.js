@@ -1,4 +1,3 @@
-// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'CHECK_LIMIT') {
     chrome.storage.local.get(['timeSpent', 'dailyLimit', 'isActive'], (data) => {
@@ -9,7 +8,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Create and show warning overlay
 function showWarning() {
   const overlay = document.createElement('div');
   overlay.id = 'screen-time-warning';
@@ -21,7 +19,6 @@ function showWarning() {
     </div>
   `;
 
-  // Add styles
   const style = document.createElement('style');
   style.textContent = `
     #screen-time-warning {
@@ -73,12 +70,38 @@ function showWarning() {
 
   document.head.appendChild(style);
   document.body.appendChild(overlay);
-
-  // Handle dismiss button
   document.getElementById('dismiss-warning').addEventListener('click', () => {
     overlay.remove();
   });
 }
 
-// Check limit when page loads
-chrome.runtime.sendMessage({ type: 'CHECK_LIMIT' }); 
+chrome.runtime.sendMessage({ type: 'CHECK_LIMIT' });
+
+document.addEventListener('visibilitychange', () => {
+  chrome.runtime.sendMessage({
+    type: 'visibilityChange',
+    isVisible: document.visibilityState === 'visible'
+  });
+});
+
+let lastActivityTime = Date.now();
+const ACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+function updateActivity() {
+  lastActivityTime = Date.now();
+}
+
+document.addEventListener('mousemove', updateActivity);
+document.addEventListener('keydown', updateActivity);
+document.addEventListener('click', updateActivity);
+document.addEventListener('scroll', updateActivity);
+
+setInterval(() => {
+  const inactiveTime = Date.now() - lastActivityTime;
+  if (inactiveTime >= ACTIVITY_TIMEOUT) {
+    chrome.runtime.sendMessage({
+      type: 'userInactive',
+      inactiveTime
+    });
+  }
+}, 60000); // Check every minute 
