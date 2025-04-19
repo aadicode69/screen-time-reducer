@@ -185,4 +185,43 @@ input[type="number"] {
   border-radius: var(--border-radius);
   text-align: center;
   font-size: 0.9rem;
+}
+
+.website-tracking-section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.website-tracking-section h3 {
+  color: #333;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+}
+
+.current-website {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.current-website p {
+  margin: 0;
+  color: #666;
+}
+
+.current-website p:first-child {
+  font-weight: 500;
+  color: #444;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
 } 

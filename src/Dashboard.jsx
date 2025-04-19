@@ -1,25 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Settings, AlertTriangle, PieChart, Lock, Unlock, Bell, ChevronRight, Home, RefreshCw, Globe } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // Import for navigation
+import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client';
+import axios from 'axios';
+
+const socket = io('http://localhost:3000');
+const API_URL = 'http://localhost:3000';
 
 const Dashboard = () => {
-  // Router navigation hook
   const navigate = useNavigate();
   
-  // State for app functionality
   const [isActive, setIsActive] = useState(true);
-  const [timeSpent, setTimeSpent] = useState(45); // in minutes
-  const [dailyLimit, setDailyLimit] = useState(120); // in minutes
+  const [timeSpent, setTimeSpent] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(120);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isExtension, setIsExtension] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [viewMode, setViewMode] = useState('dashboard');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notificationPermission, setNotificationPermission] = useState('default');
+  const [currentUrl, setCurrentUrl] = useState('');
+  const [websiteDurations, setWebsiteDurations] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Add time zone related state
   const [selectedTimeZone, setSelectedTimeZone] = useState(() => {
-    // Try to get timezone from browser or use UTC as default
+
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone;
     } catch (e) {
@@ -27,9 +32,8 @@ const Dashboard = () => {
     }
   });
   const [availableTimeZones, setAvailableTimeZones] = useState([]);
-  const [dayStart, setDayStart] = useState('00:00'); // When the day starts for tracking
+  const [dayStart, setDayStart] = useState('00:00');
 
-  // Sample website data
   const [websites, setWebsites] = useState([
     { domain: 'youtube.com', time: 22, icon: '🎬' },
     { domain: 'twitter.com', time: 18, icon: '🐦' },
@@ -38,14 +42,12 @@ const Dashboard = () => {
     { domain: 'reddit.com', time: 8, icon: '🔍' },
   ]);
 
-  // Format time function (converts minutes to hours and minutes)
   const formatTime = (minutes) => {
     const hrs = Math.floor(minutes / 60);
     const mins = ((minutes % 60) + Number.EPSILON).toFixed(1);
     return `${hrs > 0 ? `${hrs}h ` : ''}${mins}m`;
   };
   
-  // Get time in specified timezone
   const getTimeInZone = (timezone) => {
     try {
       return new Date().toLocaleString('en-US', { timeZone: timezone });
@@ -54,7 +56,6 @@ const Dashboard = () => {
     }
   };
   
-  // Format date for display in the selected timezone
   const formatDateInZone = (timezone) => {
     try {
       const options = { 
@@ -69,7 +70,6 @@ const Dashboard = () => {
     }
   };
   
-  // Format time for display in the selected timezone
   const formatTimeInZone = (timezone) => {
     try {
       const options = { 
@@ -84,9 +84,8 @@ const Dashboard = () => {
     }
   };
 
-  // Load available time zones
   useEffect(() => {
-    // This is a simplified list - in a real app, you might want to use a more comprehensive list
+
     const commonTimeZones = [
       'UTC',
       'America/New_York',
@@ -102,7 +101,7 @@ const Dashboard = () => {
       'Pacific/Auckland'
     ];
     
-    // Try to get browser's timezone and add it if not in the list
+
     try {
       const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!commonTimeZones.includes(browserTimeZone)) {
@@ -115,50 +114,51 @@ const Dashboard = () => {
     setAvailableTimeZones(commonTimeZones);
   }, []);
 
-  // Handle time limit change
-  const handleLimitChange = (e) => {
+  const handleLimitChange = async (e) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value > 0 && value <= 1440) {
       setDailyLimit(value);
+      try {
+        await axios.post(`${API_URL}/api/settings/limit`, { limit: value });
+      } catch (error) {
+        console.error('Error updating daily limit:', error);
+      }
     }
   };
 
-  // Handle day start time change
   const handleDayStartChange = (e) => {
     setDayStart(e.target.value);
   };
 
-  // Handle timezone change
   const handleTimeZoneChange = (e) => {
     setSelectedTimeZone(e.target.value);
-    // Reset time tracking when timezone changes
+
     checkDayReset(e.target.value);
   };
 
-  // Check if we need to reset daily tracking (new day in selected timezone)
   const checkDayReset = (timezone = selectedTimeZone) => {
     try {
       const now = new Date();
       const lastResetKey = 'lastResetDate';
       const lastReset = localStorage.getItem(lastResetKey);
       
-      // Get current date in selected timezone
+  
       const formatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, day: 'numeric', month: 'numeric', year: 'numeric' });
       const currentDate = formatter.format(now);
       
-      // Get current time in selected timezone for day start comparison
+  
       const timeFormatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: 'numeric', hour12: false });
       const currentTime = timeFormatter.format(now);
       
-      // Parse day start time
+  
       const [dayStartHour, dayStartMinute] = dayStart.split(':').map(Number);
       const [currentHour, currentMinute] = currentTime.split(':').map(Number);
       
-      // Check if it's a new day and we've passed the day start time
+  
       const isPastDayStart = currentHour > dayStartHour || (currentHour === dayStartHour && currentMinute >= dayStartMinute);
       
       if (lastReset !== currentDate && isPastDayStart) {
-        // It's a new day and we've passed the day start time - reset tracking
+    
         resetTimeSpent();
         localStorage.setItem(lastResetKey, currentDate);
       }
@@ -167,17 +167,14 @@ const Dashboard = () => {
     }
   };
 
-  // Toggle extension active state
   const toggleExtension = () => {
     setIsActive(prev => !prev);
   };
 
-  // Navigate to homepage
   const goToHomepage = () => {
     navigate('/'); // Redirect to the homepage
   };
 
-  // Request notification permission
   const requestNotificationPermission = async () => {
     if (Notification && Notification.permission !== "granted") {
       const permission = await Notification.requestPermission();
@@ -185,7 +182,6 @@ const Dashboard = () => {
     }
   };
 
-  // Simulate time tracking
   useEffect(() => {
     if (isActive) {
       const timer = setInterval(() => {
@@ -193,7 +189,7 @@ const Dashboard = () => {
           const newTime = prev + 1/60; // Incrementing by 1 second (1/60 of a minute)
           if (newTime >= dailyLimit && !isBlocked) {
             setIsBlocked(true);
-            // Send notification when limit is reached
+        
             if (Notification && Notification.permission === "granted") {
               new Notification("Screen Time Limit Reached", {
                 body: "You've reached your daily screen time limit!",
@@ -208,23 +204,25 @@ const Dashboard = () => {
     }
   }, [isActive, dailyLimit, isBlocked]);
 
-  // Update current time
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      // Check if we need to reset daily tracking (new day)
+  
       checkDayReset();
     }, 1000);
     return () => clearInterval(timer);
   }, [selectedTimeZone, dayStart]);
 
-  // Reset time spent
-  const resetTimeSpent = () => {
-    setTimeSpent(0);
-    setIsBlocked(false);
+  const resetTimeSpent = async () => {
+    try {
+      await axios.post(`${API_URL}/api/stats/reset`);
+      setTimeSpent(0);
+      setIsBlocked(false);
+    } catch (error) {
+      console.error('Error resetting time spent:', error);
+    }
   };
 
-  // Add a new website to block
   const [newWebsite, setNewWebsite] = useState('');
   const addWebsite = () => {
     if (newWebsite && !websites.find(site => site.domain === newWebsite)) {
@@ -233,13 +231,8 @@ const Dashboard = () => {
     }
   };
 
-  // Progress percentage calculation
   const progressPercentage = Math.min((timeSpent / dailyLimit) * 100, 100);
-  
-  // Time remaining calculation
   const timeRemaining = Math.max(dailyLimit - timeSpent, 0);
-
-  // Get time zone offset display
   const getTimeZoneOffset = (timezone) => {
     try {
       const date = new Date();
@@ -252,10 +245,8 @@ const Dashboard = () => {
     }
   };
 
-  // Format timezone for display
   const formatTimeZone = (timezone) => {
     try {
-      // Extract region and city
       const parts = timezone.split('/');
       const city = parts[parts.length - 1].replace(/_/g, ' ');
       const offset = getTimeZoneOffset(timezone);
@@ -265,7 +256,112 @@ const Dashboard = () => {
     }
   };
 
-  // Render blocked overlay if time limit exceeded
+  // Fetch initial data from backend
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        // Fetch total time spent today
+        const response = await axios.get(`${API_URL}/api/stats/daily`);
+        if (response.data && response.data.totalTime) {
+          setTimeSpent(response.data.totalTime);
+        }
+        
+        // Fetch website durations
+        const websitesResponse = await axios.get(`${API_URL}/api/stats/websites`);
+        if (websitesResponse.data && websitesResponse.data.websites) {
+          const websiteData = {};
+          websitesResponse.data.websites.forEach(site => {
+            websiteData[site.url] = site.duration;
+          });
+          setWebsiteDurations(websiteData);
+          
+          // Update websites list with real data
+          const updatedWebsites = websitesResponse.data.websites.map(site => ({
+            domain: new URL(site.url).hostname,
+            time: site.duration,
+            icon: getWebsiteIcon(new URL(site.url).hostname)
+          }));
+          setWebsites(updatedWebsites);
+        }
+      } catch (error) {
+        console.error('Error fetching data from backend:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  // Helper function to get website icon
+  const getWebsiteIcon = (domain) => {
+    if (domain.includes('youtube')) return '🎬';
+    if (domain.includes('twitter')) return '🐦';
+    if (domain.includes('facebook')) return '👥';
+    if (domain.includes('instagram')) return '📷';
+    if (domain.includes('reddit')) return '🔍';
+    return '🌐';
+  };
+
+  // Socket.IO connection for real-time updates
+  useEffect(() => {
+    // Socket.IO event listeners
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+
+    socket.on('durationUpdate', (data) => {
+      setWebsiteDurations(prev => ({
+        ...prev,
+        [data.url]: data.duration
+      }));
+      
+      // Update total time spent
+      if (data.url === currentUrl) {
+        setTimeSpent(prev => {
+          const newTime = data.duration;
+          if (newTime >= dailyLimit && !isBlocked) {
+            setIsBlocked(true);
+            
+            if (Notification && Notification.permission === "granted") {
+              new Notification("Screen Time Limit Reached", {
+                body: "You've reached your daily screen time limit!",
+                icon: "/logo.png"
+              });
+            }
+          }
+          return newTime;
+        });
+      }
+    });
+
+    // Get current URL when component mounts
+    const getCurrentUrl = () => {
+      const url = window.location.href;
+      setCurrentUrl(url);
+      socket.emit('startTracking', url);
+    };
+
+    getCurrentUrl();
+
+    // Update duration every second
+    const durationInterval = setInterval(() => {
+      if (currentUrl && isActive) {
+        socket.emit('updateDuration', {
+          url: currentUrl,
+          duration: websiteDurations[currentUrl] || 0
+        });
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(durationInterval);
+      socket.off('connect');
+      socket.off('durationUpdate');
+    };
+  }, [currentUrl, isActive, dailyLimit, isBlocked]);
+
   if (isBlocked && isActive) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -594,6 +690,18 @@ const Dashboard = () => {
                 <p>Running in development mode. Chrome extension features are simulated.</p>
               </div>
             )}
+
+            <div className="website-tracking-section">
+              <h3>Current Website Duration</h3>
+              {isLoading ? (
+                <div className="loading-indicator">Loading data...</div>
+              ) : (
+                <div className="current-website">
+                  <p>Website: {currentUrl}</p>
+                  <p>Time spent: {formatTime(websiteDurations[currentUrl] || 0)}</p>
+                </div>
+              )}
+            </div>
           </main>
           
           <footer className="bg-gray-50 px-6 py-4 border-t border-gray-200">
